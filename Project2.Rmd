@@ -1,0 +1,373 @@
+---
+title: "Project2"
+author: "Ethan Chen - eec2173"
+date: "11/12/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+#import json files, import all files in gps folder
+library(jsonlite)
+filenames <- list.files("gps", pattern="*.geojson", full.names=TRUE)
+filenames
+```
+
+```{r}
+#load the files into data
+data <- lapply(filenames, simplifyVector=TRUE, fromJSON)
+dat <- fromJSON('gps/20200819132607.geojson', simplifyVector)
+```
+
+```{r}
+length(data)
+```
+```{r}
+#making dataframe of day 1 data, converting time into human readable format
+coords <-t(simplify2array(dat$features$geometry$coordinates))
+d1 <-data.frame(time=strptime(dat$features$properties$time,
+                              format = "%Y-%m-%dT%H:%M:%S"),
+            longitude = coords[,1],
+            latitude = coords[,2],
+            day = 1)
+           
+head(d1)
+#time difference variable in seconds
+td <-as.numeric(diff(d1$time), units="secs")
+#td <- c(td, 0)
+```
+
+
+```{r}
+#making dataframe for all 11 files
+coords <-t(simplify2array(data[[1]]$features$geometry$coordinates))
+df <-data.frame(time=strptime(data[[1]]$features$properties$time,
+                              format = "%Y-%m-%dT%H:%M:%S"),
+            longitude = coords[,1],
+            latitude = coords[,2],
+            day = 1)
+           
+head(df)
+```
+
+
+```{r}
+#rowbinding rest of data from all days into 1 dataframe, df
+for(i in 2:length(data)){
+    coords <-t(simplify2array(data[[i]]$features$geometry$coordinates))
+    df2 <-data.frame(time =strptime(data[[i]]$features$properties$time,format = "%Y-%m-%dT%H:%M:%S"),
+                longitude = coords[,1],
+                latitude = coords[,2],
+                day = i)
+                
+    df <- rbind(df, df2)
+}
+head(df)
+tail(df)
+
+```
+```{r}
+#there is noise
+is.unsorted(df$time)
+```
+
+```{r}
+#plotting paths, with and without day 7
+plot(df$longitude, df$latitude, col=df$day, pch=16,
+     xlab="Longitude", ylab="Latitude", main="GPS path")
+days <- c(1:11)
+legend("topright", cex=0.75, legend=days, fill=days)
+
+
+plot(df$longitude[!df$day==7], df$latitude[!df$day==7], col=df$day[!df$day==7], pch=16,
+     xlab="Longitude", ylab="Latitude", main="GPS path no day 7 with duplicates")
+days <- c(1, 2, 3, 4, 5, 6, 8, 9, 10, 11)
+legend("topright", cex=0.75, legend=days, fill=days)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r}
+#import necessary libraries for modeling/predicting
+library(sp)
+library(rgdal)
+library(dlm)
+library(RColorBrewer)
+```
+
+```{r}
+#removing day 7 and removing duplicates, plots
+df3 <- df[!df$day==7, ]
+df3 <- df3[!duplicated( df3[,c("latitude","longitude")] ) , ]
+is.unsorted(df3$time)
+head(df3)
+nrow(df)- nrow(df3)
+plot(df3$longitude, df3$latitude, col=df3$day[!df3$day==7], pch=16,
+     xlab="Longitude", ylab="Latitude", main="GPS path no day 7 no duplicates")
+days <- c(1, 2, 3, 4, 5, 6, 8, 9, 10, 11)
+legend("topright", cex=0.75, legend=days, fill=days)
+```
+
+```{r}
+#making spatial dataframe with original full df
+spat_df <-SpatialPointsDataFrame(coords=df[,c("longitude", "latitude")],data=df['time'],proj4string=CRS("+proj=longlat +datum=WGS84 +units=m"))
+                                
+utm_df <-spTransform(spat_df, CRSobj = "+proj=utm +zone=12 +datum=WGS84 +units=m")
+
+utm_coords <-coordinates(utm_df)
+head(utm_coords)
+#tail(utm_coords)
+head(utm_coords[,1][1])
+td <-as.numeric(diff(df$time), units="secs")
+```
+```{r}
+#mkaing spatial dataframe and tum_coords with df3 (duplicates removed, day 7 removed)
+spat_df <-SpatialPointsDataFrame(coords=df3[,c("longitude", "latitude")],data=df3['time'],proj4string=CRS("+proj=longlat +datum=WGS84 +units=m"))
+                                
+utm_df <-spTransform(spat_df, CRSobj = "+proj=utm +zone=12 +datum=WGS84 +units=m")
+
+utm_coords <-coordinates(utm_df)
+#head(utm_coords)
+#tail(utm_coords)
+head(utm_coords[,1][1])
+td <-as.numeric(diff(df3$time[df3$day==1]), units="secs")
+head(td)
+
+
+```
+```{r}
+#making utm_coords1, just day 1 data, plotting GPS path day 1
+spat_df1 <-SpatialPointsDataFrame(coords=d1[,c("longitude", "latitude")],data=d1['time'],proj4string=CRS("+proj=longlat +datum=WGS84 +units=m"))
+                                
+utm_df1 <-spTransform(spat_df1, CRSobj = "+proj=utm +zone=12 +datum=WGS84 +units=m")
+
+utm_coords1 <-coordinates(utm_df1)
+head(utm_coords1)
+#tail(utm_coords)
+#head(utm_coords1[,1][1])
+#td <-as.numeric(diff(d1$time), units="secs")
+head(td)
+#length(utm_coords1[,1])
+#length(utm_coords1[,2])
+plot(utm_coords1[,1], utm_coords1[,2], pch=16,
+     xlab="Longitude", ylab="Latitude", main="GPS path day 1")
+
+```
+
+
+```{r}
+#regressing td vs. latitude and longitude
+ols <- lm(td ~ df$latitude[2:length(df$latitude)] + df$longitude[2:length(df$longitude)])
+summary(ols)
+```
+
+```{r}
+ols <- lm(td ~ utm_coords[,1][2:length(utm_coords[,1])] + utm_coords[,2][2:length(utm_coords[,2])])
+summary(ols)
+```
+```{r}
+ols <- lm(td ~ utm_coords1[,1][2:length(utm_coords1[,1])] + utm_coords1[,2][2:length(utm_coords1[,2])])
+summary(ols)
+```
+
+```{r}
+ols3 <- lm(utm_coords1[,1][2:length(utm_coords1[,1])] ~td)
+
+ols4 <- lm(utm_coords1[,2][2:length(utm_coords1[,2])] ~td)
+
+summary(ols3)
+summary(ols4)
+```
+```{r}
+plot(ols3$fitted.values, ols3$residuals, xlim=c(271000, 272200))
+```
+```{r}
+plot(ols4$fitted.values, ols4$residuals)
+```
+
+
+```{r}
+ols <- lm(td ~ utm_coords1[,1] + utm_coords1[,2])
+summary(ols)
+```
+
+```{r}
+length(utm_coords1[,1])
+length(td)
+ols <- lm(utm_coords1[,1] ~ td)
+summary(ols)
+ols2 <- lm(utm_coords1[,2] ~ td)
+summary(ols2)
+```
+
+```{r}
+plot(ols$fitted.values, ols$residuals, ylim=c(-1000, 1000))
+```
+
+```{r}
+res <- td - (ols$fitted.values)
+plot(ols$fitted.values, res, ylim=c(-500,500))
+```
+
+
+
+```{r}
+res <- utm_coords1[,2][2:length(utm_coords1[,1])] - (ols4$fitted.values)
+plot(ols4$fitted.values, res)
+```
+```{r}
+predict.lm(nextlat~df$longitude+df$latitude)
+```
+```{r}
+l <- lm(df$longitude~df$latitude)
+summary(l)
+plot(l$fitted.values, l$residuals)
+```
+
+
+
+```{r}
+y <- log(abs(td)+1)
+inv_y <- function(x){
+    return(exp(x)-1)
+}
+hist(y)
+```
+```{r}
+#sorting the data in increasing order
+times <- seq(min(df$time), max(df$time), length.out=100) 
+head(times)
+```
+
+```{r}
+longs <- seq(min(df$longitude), max(df$longitude), length.out=100)
+lats <- seq(min(df$latitude), max(df$latitude), length.out=100)
+locs <- expand.grid(longs, lats)
+head(locs)
+```
+
+
+```{r}
+pars <- ols$coefficients
+fits <- pars[1] + pars[2] * locs[, 2] + pars[3] * locs[, 1] + pars[4] * locs[, 2]^2 + pars[5] * locs[, 1]^2
+y_fits <- inv_y(fits)
+percs <- c(0, 0.5, 0.75, 0.9, 0.95, 0.975, 1)
+breaks <- quantile(td, percs)
+fit_cats <- cut(fits, breaks = breaks, include.lowest = TRUE)
+plot(locs[, 1], locs[, 2], col=cols[fit_cats])
+points(d1$longitude, d1$latitude, col=cols[col_cat], pch=16)
+
+```
+
+
+
+```{r}
+second_per_rec =median(td)
+gps_variance <- 20^2
+v_mat <-diag(c(gps_variance, gps_variance))
+f_mat <-matrix(c(1,0,0,0, 0,1,0,0), nrow=2, byrow = TRUE)
+dt <- second_per_rec
+g_mat <-matrix(c(1, 0, dt, 0,0, 1, 0, dt,0, 0, 1, 0,0, 0, 0, 1), byrow=TRUE, ncol=4)
+avg_walk_speed_m_per_sec <- 1.4
+dlm_spec <-dlm(FF= f_mat,GG= g_mat,V = v_mat,
+               W =diag(c(5, 5, 1, 1)^2),
+               m0 =matrix(c(utm_coords[1,],rep(avg_walk_speed_m_per_sec/dt, 2)),ncol=1), 
+               C0 =diag(rep(10^2, 4)))
+dlm_filter_mod <-dlmFilter(utm_coords, dlm_spec)
+dlm_smooth_mod <-dlmSmooth(dlm_filter_mod)
+plot(cbind(utm_coords[1:100, ], dlm_filter_mod$m[2:101, 1:2], dlm_smooth_mod$s[2:101,1:2]),type='p', col =c("black", "red", "blue"), xlab="UTM X", ylab="UTM Y")
+legend("topright", col =c("black", "red", "blue"),pch = 1, legend =c("raw", "kalman filter","kalman smoother"))
+```
+
+```{r}
+# Extracting speed
+speed =sqrt(dlm_smooth_mod$s[, 3]^2+dlm_smooth_mod$s[, 4]^2)
+# Extracting sesssions. Note that I am assuming data frame is sorted by time stamp.
+td <-diff(utm_df$time)
+inactive_groups <-cut(1:length(td), breaks=c(1,which(td>60),length(td)))
+# time difference vector has one less element than the length of time vector.# for simplicity I am dropping the first velocity vector
+tapply(speed[-(1:2)], inactive_groups, summary)
+```
+
+```{r}
+par(mfrow=c(2,2))
+invisible(tapply(speed[-(1:2)], inactive_groups, hist))
+```
+
+```{r}
+par(mfrow =c(1,1))
+boxplot(speed[-(1:2)]~inactive_groups, ylim =c(0,10))
+```
+```{r}
+plot(dlm_smooth_mod$s[-1,1:2], type="p", col =ifelse(speed[-1]>30, "red","black"))
+```
+
+
+```{r}
+mean_fun <- function(s) return(rep(0, nrow(s)))
+cov_fun <- function(s1, sigma2=2, theta=5) {
+    dist_mat <- as.matrix(dist(s1, diag=TRUE, upper=TRUE))
+    return(sigma2 * exp(- dist_mat / theta))
+}
+
+locs <- expand.grid(1:20, 1:20)
+
+m_vec <- mean_fun(locs)
+
+cov_mat <- cov_fun(locs)
+```
+
+```{r}
+length(d1$longitude)
+length(y)
+krig_mod <- fields::Krig(d1[, c("longitude", "latitude")],
+                         y)
+krig_preds <- predict(krig_mod, locs)
+y_krigs <- inv_y(krig_preds)
+
+krig_fit_cats <- cut(y_krigs, breaks = breaks, include.lowest = TRUE)
+plot(locs[, 1], locs[, 2], col=cols[krig_fit_cats])
+points(d1$longitude, d1$latitude, pch=16)
+```
+```{r}
+krig_mod2 <- fields::Krig(d1[, c("longitude", "latitude")],
+                          y, cov.args = list(theta=10, Distance='rdist.earth'),
+                          lambda=0.5)
+krig_preds2 <- predict(krig_mod2, locs)
+y_krigs2 <- inv_y(krig_preds2)
+
+krig_fit_cats2 <- cut(y_krigs2, breaks = breaks, include.lowest = TRUE)
+plot(locs[, 1], locs[, 2], col=cols[krig_fit_cats2])
+points(d1$longitude, d1$latitude, pch=16)
+```
+
+```{r}
+temps <- c(84.7, 84.3, 84, 83.7, 82.6, 82.2, 81.8, 81.5, 81.1, 81.1, 79.9)
+for(i in 1:length(df$day)){
+  j=df$day[i]
+  df$temp[i] <- temps[j]
+}
+temps[1]
+head(df)
+head(df$temp)
+tail(df)
+```
+
+```{r}
+m <- lm(speed[2:length(speed)]~df$temp)
+summary(m)
+plot(m$fitted.values, m$residuals)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
