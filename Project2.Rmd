@@ -227,7 +227,7 @@ res <- utm_coords1[,2][2:length(utm_coords1[,1])] - (ols4$fitted.values)
 plot(ols4$fitted.values, res)
 ```
 ```{r}
-predict.lm(nextlat~df$longitude+df$latitude)
+#predict.lm(nextlat~df$longitude+df$latitude)
 ```
 ```{r}
 l <- lm(df$longitude~df$latitude)
@@ -257,18 +257,6 @@ locs <- expand.grid(longs, lats)
 head(locs)
 ```
 
-
-```{r}
-pars <- ols$coefficients
-fits <- pars[1] + pars[2] * locs[, 2] + pars[3] * locs[, 1] + pars[4] * locs[, 2]^2 + pars[5] * locs[, 1]^2
-y_fits <- inv_y(fits)
-percs <- c(0, 0.5, 0.75, 0.9, 0.95, 0.975, 1)
-breaks <- quantile(td, percs)
-fit_cats <- cut(fits, breaks = breaks, include.lowest = TRUE)
-plot(locs[, 1], locs[, 2], col=cols[fit_cats])
-points(d1$longitude, d1$latitude, col=cols[col_cat], pch=16)
-
-```
 
 
 
@@ -314,19 +302,6 @@ plot(dlm_smooth_mod$s[-1,1:2], type="p", col =ifelse(speed[-1]>30, "red","black"
 ```
 
 
-```{r}
-mean_fun <- function(s) return(rep(0, nrow(s)))
-cov_fun <- function(s1, sigma2=2, theta=5) {
-    dist_mat <- as.matrix(dist(s1, diag=TRUE, upper=TRUE))
-    return(sigma2 * exp(- dist_mat / theta))
-}
-
-locs <- expand.grid(1:20, 1:20)
-
-m_vec <- mean_fun(locs)
-
-cov_mat <- cov_fun(locs)
-```
 
 ```{r}
 length(d1$longitude)
@@ -338,17 +313,6 @@ y_krigs <- inv_y(krig_preds)
 
 krig_fit_cats <- cut(y_krigs, breaks = breaks, include.lowest = TRUE)
 plot(locs[, 1], locs[, 2], col=cols[krig_fit_cats])
-points(d1$longitude, d1$latitude, pch=16)
-```
-```{r}
-krig_mod2 <- fields::Krig(d1[, c("longitude", "latitude")],
-                          y, cov.args = list(theta=10, Distance='rdist.earth'),
-                          lambda=0.5)
-krig_preds2 <- predict(krig_mod2, locs)
-y_krigs2 <- inv_y(krig_preds2)
-
-krig_fit_cats2 <- cut(y_krigs2, breaks = breaks, include.lowest = TRUE)
-plot(locs[, 1], locs[, 2], col=cols[krig_fit_cats2])
 points(d1$longitude, d1$latitude, pch=16)
 ```
 
